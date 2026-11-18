@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Le Grand Prix du Pélican — 鹈鹕单车蔚蓝海岸 3D 巡礼</title>
+  <meta name="description" content="实时 WebGL2 3D 交互剧场：双骨逆运动学（2-Bone IK）鹈鹕骑行复古钢架单车，穿越蔚蓝海岸灯塔长堤，内置 GLSL 海洋着色器与程序化 Web Audio 声效。" />
+  <link rel="icon" type="image/jpeg" href="./assets/emblem.jpg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,700;1,9..144,700&family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./styles.css" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "./vendor/build/three.module.min.js",
+        "three/addons/": "./vendor/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <!-- Loading Curtain -->
+  <div id="loading-curtain" class="loading-curtain" role="status" aria-live="polite">
+    <img src="./assets/emblem.jpg" alt="Club Cycliste du Pélican Crest" class="loading-emblem" />
+    <span class="loading-eyebrow">Club Cycliste du Pélican · Côte d'Azur</span>
+    <h1 class="loading-title">Le Grand Prix du Pélican</h1>
+    <div class="loading-bar-track">
+      <div id="loading-bar-fill" class="loading-bar-fill"></div>
+    </div>
+    <div id="loading-status" class="loading-status">正在装配复古钢架传动链条与双骨逆运动学骨骼…</div>
+  </div>
+
+  <!-- 3D WebGL2 Canvas Mount -->
+  <main id="viewport" aria-label="3D 鹈鹕骑自行车交互场景"></main>
+
+  <!-- Perimeter Studio HUD -->
+  <div class="hud-layer">
+    <header class="hud-top">
+      <div class="race-bib-card hud-collapsible">
+        <img src="./assets/emblem.jpg" alt="Pelican Cycling Crest" class="bib-crest" />
+        <div class="bib-meta">
+          <div class="bib-eyebrow">
+            <span class="bib-number">DOSSARD 07</span>
+            <span id="ride-mode-label">AUTOPILOT · 领骑巡航</span>
+          </div>
+          <h2 class="bib-title">Capitaine Archibald</h2>
+          <p class="bib-subtitle">2-Bone IK 双骨解算 · 48 节动态链条 · GLSL 海浪与合成声学</p>
+        </div>
+      </div>
+
+      <div class="top-right-cluster">
+        <div class="chronometer-strip hud-collapsible" aria-label="实时骑行遥测仪表">
+          <div class="metric-cell">
+            <span class="metric-label">VITESSE</span>
+            <div class="metric-value"><span id="metric-speed">24.8</span><span class="metric-unit">km/h</span></div>
+          </div>
+          <div class="metric-divider"></div>
+          <div class="metric-cell">
+            <span class="metric-label">CADENCE</span>
+            <div class="metric-value"><span id="metric-rpm">78</span><span class="metric-unit">rpm</span></div>
+          </div>
+          <div class="metric-divider"></div>
+          <div class="metric-cell">
+            <span class="metric-label">DISTANCE</span>
+            <div class="metric-value"><span id="metric-dist">0.00</span><span class="metric-unit">km</span></div>
+          </div>
+          <div class="metric-divider"></div>
+          <div class="metric-cell">
+            <span class="metric-label">SARDINES</span>
+            <div class="metric-value">🐟 <span id="metric-fish">2</span></div>
+          </div>
+          <div class="metric-divider"></div>
+          <div class="metric-cell">
+            <span class="metric-label">RENDER</span>
+            <div class="metric-value"><span id="metric-fps">60</span><span class="metric-unit">fps</span></div>
+          </div>
+        </div>
+
+        <div class="utility-bar">
+          <button id="btn-audio" class="icon-pill hud-collapsible" type="button" title="开启或静音程序化合成声效 (M)">
+            <span id="audio-icon">🔇</span> <span id="audio-label">开启海浪与车铃声</span>
+          </button>
+          <button id="btn-postcard" class="icon-pill hud-collapsible" type="button" title="生成蔚蓝海岸纪念明信片快照 (P)">
+            📷 明信片快照
+          </button>
+          <button id="btn-inspector" class="icon-pill is-active hud-collapsible" type="button" title="展开或收起骨骼与机械检视器 (I)">
+            🔧 机械与骨骼检视
+          </button>
+          <button id="btn-hide-hud" class="icon-pill" type="button" title="切换纯净全屏观景模式 (H)">
+            👁 纯净观景
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Bottom Interactive Cockpit -->
+    <footer class="hud-bottom hud-collapsible">
+      <div id="toast-banner" class="toast-banner" role="status"></div>
+
+      <div class="cockpit-dock">
+        <div class="dock-row">
+          <button id="act-bell" class="action-btn" type="button">
+            🔔 摇响黄铜车铃 <span class="kbd-hint">B</span>
+          </button>
+          <button id="act-honk" class="action-btn" type="button">
+            📢 喉囊鸣叫 <span class="kbd-hint">K</span>
+          </button>
+          <button id="act-fish" class="action-btn accent-mint" type="button">
+            🐟 海面跃鱼投喂 <span class="kbd-hint">F</span>
+          </button>
+          <button id="act-jump" class="action-btn" type="button">
+            🪽 振翅跃起滑翔 <span class="kbd-hint">Space</span>
+          </button>
+          <button id="act-sprint" class="action-btn accent-mandarin" type="button">
+            ⚡ 破风冲刺 <span class="kbd-hint">Shift</span>
+          </button>
+        </div>
+
+        <div class="dock-row">
+          <div class="seg-group" role="group" aria-label="机位导播切换">
+            <button class="seg-btn is-active" data-cam="follow" type="button">🎥 追随跟拍</button>
+            <button class="seg-btn" data-cam="orbit" type="button">🧭 自由环绕</button>
+            <button class="seg-btn" data-cam="pov" type="button">🚴 车把第一视角</button>
+            <button class="seg-btn" data-cam="wheel" type="button">⚙️ 链轮特写</button>
+            <button class="seg-btn" data-cam="cinema" type="button">🌅 海岸画报</button>
+          </div>
+
+          <div class="dock-subdivider"></div>
+
+          <div class="seg-group" role="group" aria-label="天光与气象预设">
+            <button class="seg-btn is-active" data-preset="sunset" type="button">🌇 蔚蓝黄昏</button>
+            <button class="seg-btn" data-preset="noon" type="button">☀️ 正午碧海</button>
+            <button class="seg-btn" data-preset="night" type="button">🌌 荧光星夜</button>
+            <button class="seg-btn" data-preset="headwind" type="button">💨 逆风狂飙</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="controls-footnote">
+        拖拽画面自由旋转视角 · 滚轮缩放 · <strong>W/S</strong> 加速与点刹 · <strong>A/D</strong> 转向压弯（自动切手动骑行） · <strong>1–5</strong> 切换机位
+      </div>
+    </footer>
+  </div>
+
+  <!-- Right Collapsible Biomechanical & Mechanical Rig Inspector -->
+  <aside id="inspector-drawer" class="inspector-drawer hud-collapsible" aria-label="生物力学与机械结构检视面板">
+    <div class="inspector-header">
+      <h3 class="inspector-title">生物力学与机械检视</h3>
+      <span class="inspector-badge">LIVE RIG</span>
+    </div>
+
+    <div class="polar-row">
+      <svg class="polar-svg" viewBox="0 0 80 80" aria-hidden="true">
+        <circle cx="40" cy="40" r="30" fill="none" stroke="rgba(16,35,54,0.16)" stroke-width="2" stroke-dasharray="3 3" />
+        <circle cx="40" cy="40" r="8" fill="none" stroke="#d9a441" stroke-width="2" />
+        <line id="polar-crank-line" x1="40" y1="10" x2="40" y2="70" stroke="#102336" stroke-width="2.5" stroke-linecap="round" />
+        <circle id="polar-right-dot" cx="40" cy="10" r="4.8" fill="#f26a2e" />
+        <circle id="polar-left-dot" cx="40" cy="70" r="4.2" fill="#4cc9b0" />
+      </svg>
+      <div class="polar-readout">
+        <div>曲柄相位 <strong id="ik-crank-deg">000°</strong></div>
+        <div>足踏误差 <strong id="ik-foot-err">0.0 mm</strong></div>
+        <div>翼展升力 <strong id="ik-wing-lift">0 N</strong></div>
+        <span>橙点: 右蹼 · 青点: 左蹼</span>
+      </div>
+    </div>
+
+    <div class="control-group">
+      <div class="control-label-row">
+        <label for="slider-speed">目标巡航速度</label>
+        <code id="val-speed">25 km/h</code>
+      </div>
+      <input id="slider-speed" type="range" min="0" max="52" step="1" value="25" />
+    </div>
+
+    <div class="control-group">
+      <div class="control-label-row">
+        <label for="slider-explode">单车机械爆炸拆解</label>
+        <code id="val-explode">0%</code>
+      </div>
+      <input id="slider-explode" type="range" min="0" max="100" step="1" value="0" />
+    </div>
+
+    <div class="toggle-grid">
+      <button class="chip-toggle is-on" data-toggle="autopilot" type="button">
+        <span>自动领骑</span><span class="chip-dot"></span>
+      </button>
+      <button class="chip-toggle" data-toggle="ikDebug" type="button">
+        <span>IK 骨骼线</span><span class="chip-dot"></span>
+      </button>
+      <button class="chip-toggle" data-toggle="wireframe" type="button">
+        <span>线框透视</span><span class="chip-dot"></span>
+      </button>
+      <button class="chip-toggle is-on" data-toggle="cap" type="button">
+        <span>船长礼帽</span><span class="chip-dot"></span>
+      </button>
+      <button class="chip-toggle is-on" data-toggle="goggles" type="button">
+        <span>飞行风镜</span><span class="chip-dot"></span>
+      </button>
+      <button class="chip-toggle is-on" data-toggle="scarf" type="button">
+        <span>真丝围巾</span><span class="chip-dot"></span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Vintage Souvenir Postcard Modal -->
+  <div id="postcard-modal" class="postcard-modal" role="dialog" aria-modal="true" aria-labelledby="postcard-title">
+    <div class="postcard-dialog">
+      <div class="inspector-header">
+        <h3 id="postcard-title" class="inspector-title">Carte Postale · 蔚蓝海岸骑行纪念明信片</h3>
+        <button id="btn-close-postcard" class="icon-pill" type="button">✕ 关闭</button>
+      </div>
+      <canvas id="postcard-canvas" width="1280" height="800" class="postcard-preview"></canvas>
+      <div class="postcard-actions">
+        <span style="font-size: 12px; color: var(--harbor-navy-soft);">已合成实时 WebGL 画面、赛会徽章邮戳与瞬时遥测数据</span>
+        <button id="btn-download-postcard" class="action-btn accent-mandarin" type="button">⬇ 下载高清 PNG 明信片</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>
